@@ -126,27 +126,30 @@ public class STUN implements Runnable {
             new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    DatagramPacket sourcePacket;
+                    DatagramPacket[] sourcePackets = new DatagramPacket[100];
                     byte[][] sourceBuffer = new byte[100][516];
+                    for (int i = 0; i < 100; i++) {
+                        sourcePackets[i] = new DatagramPacket(sourceBuffer[i], sourceBuffer[i].length);
+                    }
+
                     int sourceBufferIndex = 0;
                     IPEndPoint incomingAddr;
                     DatagramPacket sourceSoundPacket;
                     try {
                         while (true) {
-                            sourcePacket = new DatagramPacket(sourceBuffer[sourceBufferIndex], sourceBuffer[sourceBufferIndex].length);
-                            sourceSocket.receive(sourcePacket);
+                            sourceSocket.receive(sourcePackets[sourceBufferIndex]);
                             String mac = new String(sourceBuffer[sourceBufferIndex], 0, 4);
 
                             incomingAddr = sourcePool.get(mac);
                             // update the source pool
-                            if ( incomingAddr == null || !incomingAddr.getIpAddress().equals(sourcePacket.getAddress()) || incomingAddr.getPort() != sourcePacket.getPort()) {
-                                incomingAddr = new IPEndPoint(sourcePacket.getAddress(), sourcePacket.getPort());
+                            if ( incomingAddr == null || !incomingAddr.getIpAddress().equals(sourcePackets[sourceBufferIndex].getAddress()) || incomingAddr.getPort() != sourcePackets[sourceBufferIndex].getPort()) {
+                                incomingAddr = new IPEndPoint(sourcePackets[sourceBufferIndex].getAddress(), sourcePackets[sourceBufferIndex].getPort());
                                 sourcePool.put(mac, incomingAddr);
                             }
 
                             if (isPhoneOnline) {
                                 // forward the sound packet to device
-                                DebugMessage.log(TAG, sourcePacket.getLength() + "");
+                                DebugMessage.log(TAG, sourcePackets[sourceBufferIndex].getLength() + "");
                                 sourceSoundPacket = new DatagramPacket(sourceBuffer[sourceBufferIndex], 4, sourceBuffer[sourceBufferIndex].length - 4, phoneAdd.getIpAddress(), phoneAdd.getPort());
                                 communicationPort.send(sourceSoundPacket);
                             }
