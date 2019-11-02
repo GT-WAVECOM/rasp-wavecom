@@ -126,24 +126,26 @@ public class STUN implements Runnable {
             new Thread(new Runnable() {
                 @Override
                 public void run() {
+                    DatagramPacket sourcePacket;
                     byte[] sourceBuffer = new byte[516];
                     IPEndPoint incomingAddr;
                     DatagramPacket sourceSoundPacket;
                     try {
                         while (true) {
-                            DatagramPacket packet = new DatagramPacket(sourceBuffer, sourceBuffer.length);
-                            sourceSocket.receive(packet);
+                            sourcePacket = new DatagramPacket(sourceBuffer, sourceBuffer.length);
+                            sourceSocket.receive(sourcePacket);
                             String mac = new String(sourceBuffer, 0, 5);
-                            DebugMessage.log(TAG, mac);
+
                             incomingAddr = sourcePool.get(mac);
                             // update the source pool
-                            if ( incomingAddr == null || !incomingAddr.getIpAddress().equals(packet.getAddress()) || incomingAddr.getPort() != packet.getPort()) {
-                                incomingAddr = new IPEndPoint(packet.getAddress(), packet.getPort());
+                            if ( incomingAddr == null || !incomingAddr.getIpAddress().equals(sourcePacket.getAddress()) || incomingAddr.getPort() != sourcePacket.getPort()) {
+                                incomingAddr = new IPEndPoint(sourcePacket.getAddress(), sourcePacket.getPort());
                                 sourcePool.put(mac, incomingAddr);
                             }
 
                             if (isPhoneOnline) {
                                 // forward the sound packet to device
+                                DebugMessage.log(TAG, sourcePacket.getLength() + "");
                                 sourceSoundPacket = new DatagramPacket(sourceBuffer, 5, sourceBuffer.length - 4, phoneAdd.getIpAddress(), phoneAdd.getPort());
                                 communicationPort.send(sourceSoundPacket);
                             }
