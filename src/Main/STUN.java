@@ -1,10 +1,9 @@
 package Main;
 
 import Utils.*;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.SocketException;
+
+import javax.crypto.spec.DESedeKeySpec;
+import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
@@ -17,16 +16,19 @@ public class STUN implements Runnable {
     private boolean[] stunPoolStatus;
     private int stunPoolIndex;
     private String lightSailPublicIP;
-    private Map<String, PoolInformation> poolQueue;
+    private InetAddress heartBeatAddress;
+    private int heartBeatPort;
+    private byte[] heartbeat;
+    private Map<String, PoolInformation> sourcePool;
 
     public STUN(int port, boolean[] stunPoolStatus,
-                Map<String, PoolInformation> poolQueue,
+                Map<String, PoolInformation> sourcePool,
                 String lightSailPublicIP, int index) {
         listeningPort = port;
         this.stunPoolStatus = stunPoolStatus;
         this.lightSailPublicIP = lightSailPublicIP;
         stunPoolIndex = index;
-        this.poolQueue = poolQueue;
+        this.sourcePool = sourcePool;
     }
 
     public static byte[] addr2bytes(IPEndPoint endPoint) {
@@ -53,29 +55,56 @@ public class STUN implements Runnable {
         return res;
     }
 
+    private IPEndPoint byte2addr(byte[] data) throws UnknownHostException
+    {
+        int offset = 0;
+        //Address
+        byte[] ip = new byte[4];
+        ip[0] = data[offset++];
+        ip[1] = data[offset++];
+        ip[2] = data[offset++];
+        ip[3] = data[offset++];
+
+        //Port
+        int firstDigit = byte2int(data[offset++]);
+        int secondDigit = byte2int(data[offset++]);
+        int port = (firstDigit | secondDigit << 8);
+
+        return new IPEndPoint(InetAddress.getByAddress(ip), port);
+    }
+
+    private int byte2int(byte input) {
+        int res = 0;
+        for (int i = 0; i < 8; i++) {
+            int mask = 1 << i;
+            res |= input & mask;
+        }
+        return res;
+    }
+
     @Override
     public void run() {
         try {
             // binding the stun to given port
             DebugMessage.log(TAG, "STUN Socket is trying to bind to port: " + listeningPort);
+            // communication port is used for communication with light sail server
             DatagramSocket communicationPort = new DatagramSocket(listeningPort);
             communicationPort.setReuseAddress(true);
             stunPoolStatus[stunPoolIndex] = true;
 
-            boolean[] isSendingHeartBeat = new boolean[] {true};
+            // heart beat thread
             new Thread(new Runnable() {
                 @Override
                 public void run() {
                     try {
-                        InetAddress lightSailAddress = InetAddress.getByName(lightSailPublicIP);
-                        byte[] heartbeat = "rasp 1".getBytes();
+                        heartBeatAddress = InetAddress.getByName(lightSailPublicIP);
+                        heartBeatPort = 7000;
+                        heartbeat = "rasp 1".getBytes();
                         DatagramPacket heartbeatPacket;
                         while (true) {
-                            if (isSendingHeartBeat[0]) {
-                                DebugMessage.log(TAG, "Sending heartbeat...");
-                                heartbeatPacket = new DatagramPacket(heartbeat, heartbeat.length, lightSailAddress, 7000);
-                                communicationPort.send(heartbeatPacket);
-                            }
+                            DebugMessage.log(TAG, "Sending heartbeat to: " + heartBeatAddress.toString() + heartBeatPort);
+                            heartbeatPacket = new DatagramPacket(heartbeat, heartbeat.length, heartBeatAddress, heartBeatPort);
+                            communicationPort.send(heartbeatPacket);
                             Thread.sleep(3000);
                         }
                     } catch (Exception e) {
@@ -85,120 +114,28 @@ public class STUN implements Runnable {
             }).start();
 
             //start listening to the port
-            byte[] buffer = new byte[128];
-//            while (true) {
-//                DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-//                communicationPort.receive(packet);
-//                String msg = new String(packet.getData(), 0, packet.getLength());
-//                IPEndPoint incomingAddress = new IPEndPoint(packet.getAddress(), packet.getPort());
-//
-//                if (msg.startsWith("del")) { // voice call cancel request
-//                    DebugMessage.log(TAG, "Communication cancel requested");
-//                    String pool = msg.substring(4);
-//                    poolQueue.remove(pool);
-//                    byte[] response = "cancel!!".getBytes();
-//                    DatagramPacket resp = new DatagramPacket(response, response.length, incomingAddress.getIpAddress(), incomingAddress.getPort());
-//                    communicationPort.send(resp);
-//                    DebugMessage.log(TAG, "cancel request before connecting");
-//                } else {
-//                    DebugMessage.log(TAG, String.format("Connection from %s:%d", incomingAddress.getIpAddress().toString(), incomingAddress.getPort()));
-//
-//                    String[] data = msg.trim().split(" ", 0);
-//                    if (data.length != 2) {
-//                        DebugMessage.log(TAG, "Malformed request, discarded...");
-//                        continue;
-//                    }
-//
-//                    String pool = data[0];
-//                    DeviceType deviceType = DeviceType.getDeviceType(data[1]);
-//                    DebugMessage.log(TAG, String.format("Stun server %d received request from %s for pool \"%s\"", this.stunPoolIndex, data[1], pool));
-//
-//                    byte[] resp;
-//                    if (!poolQueue.containsKey(pool)) {
-//
-//                        if (deviceType == DeviceType.MobilePhone) {
-//                            resp = "offline!".getBytes();
-//                            DatagramPacket respPacket = new DatagramPacket(resp, resp.length, incomingAddress.getIpAddress(), incomingAddress.getPort());
-//                            communicationPort.send(respPacket);
-//                            continue;
-//                        }
-//
-//                        PoolInformation info = new PoolInformation(incomingAddress, deviceType);
-//                        poolQueue.put(pool, info);
-//
-//                        resp = new byte[] {'1'};
-//                        DatagramPacket respPacket = new DatagramPacket(resp, resp.length, incomingAddress.getIpAddress(), incomingAddress.getPort());
-//                        communicationPort.send(respPacket);
-//                    } else {
-//                        PoolInformation peerInfo = poolQueue.get(pool);
-//                        // if the request exits, waiting for phone to join
-//                        if (deviceType == DeviceType.ESP32 && !peerInfo.isCallGoingOn()) {
-//                            PoolInformation info = new PoolInformation(incomingAddress, deviceType);
-//                            poolQueue.put(pool, info);
-//
-//                            resp = new byte[] {'1'};
-//                            DatagramPacket respPacket = new DatagramPacket(resp, resp.length, incomingAddress.getIpAddress(), incomingAddress.getPort());
-//                            communicationPort.send(respPacket);
-//                            continue;
-//                        }
-//
-//                        if (!peerInfo.isCallGoingOn()) {
-//                            // initiate the turn socket and share with device and phone
-//                            Random rand = new Random();
-//                            DatagramSocket turnSocket = null;
-//                            boolean isTurnPortValid = false;
-//                            int turnPort = listeningPort + 1;
-//
-//                            while (!isTurnPortValid) {
-//                                try {
-//                                    turnPort = listeningPort + rand.nextInt(1000) + 1;
-//                                    DebugMessage.log(TAG, "Turn server is trying to bind to port: " + turnPort);
-//                                    turnSocket = new DatagramSocket(turnPort);
-//                                    isTurnPortValid = true;
-//                                    turnSocket.setReuseAddress(true);
-//                                } catch (SocketException e) {
-//                                    DebugMessage.log(TAG, "Turn port " + turnPort + " is not available, retrying...");
-//                                }
-//                            }
-//
-//                            DebugMessage.log(TAG, "Turn server is listening on port: " + turnSocket.getLocalPort());
-//
-//                            InetAddress turnAddress = InetAddress.getByName(lightSailPublicIP);
-//                            byte[] turnBuf = addr2bytes(new IPEndPoint(turnAddress, turnPort));
-//
-//                            DatagramPacket peerPacket = new DatagramPacket(turnBuf, turnBuf.length,
-//                                    incomingAddress.getIpAddress(), incomingAddress.getPort());
-//
-//                            DatagramPacket currPacket = new DatagramPacket(turnBuf, turnBuf.length,
-//                                    peerInfo.getEndPoint().getIpAddress(), peerInfo.getEndPoint().getPort());
-//
-//                            communicationPort.send(peerPacket);
-//                            communicationPort.send(currPacket);
-//
-//                            // initiate the turn thread
-//                            DebugMessage.log(TAG, "Hurray! symmetric chat link established.");
-//                            DebugMessage.log(TAG, "======== transfer to turn server =======\n");
-//
-//                            TURN turn = new TURN(turnSocket, new PoolInformation(incomingAddress, deviceType), new PoolInformation(peerInfo.getEndPoint(), peerInfo.getDeviceType()), pool, poolQueue);
-//                            Thread turnThread = new Thread(turn);
-//                            turnThread.setDaemon(true);
-//                            turnThread.start();
-//
-//                            peerInfo.setEndPoint(new IPEndPoint(turnAddress, turnPort));
-//                            peerInfo.setCallGoingOn(true);
-//
-//                        } else { // voice communication has been initiated, handle the device retry request
-//                            DebugMessage.log(TAG, "Retry request for the TURN server from " + data[1]);
-//                            PoolInformation currInfo = poolQueue.get(pool);
-//                            byte[] turnBuf = addr2bytes(currInfo.getEndPoint());
-//                            DatagramPacket currPacket = new DatagramPacket(turnBuf, turnBuf.length,
-//                                    incomingAddress.getIpAddress(), incomingAddress.getPort());
-//                            communicationPort.send(currPacket);
-//                            DebugMessage.log(TAG, "resend: " + currInfo.getEndPoint());
-//                        }
-//                    }
-//                }
-//            }
+            byte[] buffer = new byte[512];
+            while (true) {
+                DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                communicationPort.receive(packet);
+                DebugMessage.log(TAG, packet.getLength() + "");
+                if (packet.getLength() == 6) {
+                    IPEndPoint phoneAdd = byte2addr(packet.getData());
+                    DebugMessage.log(TAG, phoneAdd.toString());
+                    heartBeatAddress = phoneAdd.getIpAddress();
+                    heartBeatPort = phoneAdd.getPort();
+                    heartbeat = "1".getBytes();
+                } else if (packet.getLength() == 1) { // either response from stun (1 -> phone offline) or heartbeat (2) from phone
+                    String msg = new String(packet.getData(), 0, packet.getLength());
+                } else if (packet.getLength() == 8) { // LC STOP
+                    String msg = new String(packet.getData(), 0, packet.getLength());
+                    DebugMessage.log(TAG, msg);
+                    heartBeatAddress = InetAddress.getByName(lightSailPublicIP);
+                    heartBeatPort = 7000;
+                    heartbeat = "rasp 1".getBytes();
+                }
+
+            }
         } catch (SocketException e) {
             System.out.println("Binding to port " + listeningPort + " fail");
             e.printStackTrace();

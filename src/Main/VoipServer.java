@@ -10,18 +10,18 @@ public class VoipServer {
     private String lightSailPublicIP;
     private int numOfSTUN;
     private boolean[] stunPoolStatus;
-    private Map<String, PoolInformation> poolQueue;
+    private Map<String, PoolInformation> sourcePool;
 
     public VoipServer(String lightSailPublicIP, int numOfSTUN) {
         this.lightSailPublicIP = lightSailPublicIP;
         this.numOfSTUN = numOfSTUN;
         stunPoolStatus = new boolean[numOfSTUN];
-        poolQueue = new HashMap<>();
+        sourcePool = new HashMap<>();
     }
 
     public void serverInit() {
         for (int i = 0; i < numOfSTUN; i++) {
-            STUN stun = new STUN(7000 + i * 1000, stunPoolStatus, poolQueue,
+            STUN stun = new STUN(7000 + i * 1000, stunPoolStatus, sourcePool,
                     lightSailPublicIP, i);
             new Thread(stun).start();
         }
