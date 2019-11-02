@@ -144,7 +144,7 @@ public class STUN implements Runnable {
 
                             if (isPhoneOnline) {
                                 // forward the sound packet to device
-                                sourceSoundPacket = new DatagramPacket(sourceBuffer, 5, sourceBuffer.length, phoneAdd.getIpAddress(), phoneAdd.getPort());
+                                sourceSoundPacket = new DatagramPacket(sourceBuffer, 5, sourceBuffer.length - 4, phoneAdd.getIpAddress(), phoneAdd.getPort());
                                 communicationPort.send(sourceSoundPacket);
                             }
                         }
