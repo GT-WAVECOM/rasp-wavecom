@@ -128,14 +128,14 @@ public class STUN implements Runnable {
                 public void run() {
                     DatagramPacket sourcePacket;
                     byte[][] sourceBuffer = new byte[100][516];
-                    int sounceBufferIndex = 0;
+                    int sourceBufferIndex = 0;
                     IPEndPoint incomingAddr;
                     DatagramPacket sourceSoundPacket;
                     try {
                         while (true) {
-                            sourcePacket = new DatagramPacket(sourceBuffer[sounceBufferIndex], sourceBuffer[sounceBufferIndex].length);
+                            sourcePacket = new DatagramPacket(sourceBuffer[sourceBufferIndex], sourceBuffer[sourceBufferIndex].length);
                             sourceSocket.receive(sourcePacket);
-                            String mac = new String(sourceBuffer[sounceBufferIndex], 0, 4);
+                            String mac = new String(sourceBuffer[sourceBufferIndex], 0, 4);
 
                             incomingAddr = sourcePool.get(mac);
                             // update the source pool
@@ -147,11 +147,11 @@ public class STUN implements Runnable {
                             if (isPhoneOnline) {
                                 // forward the sound packet to device
                                 DebugMessage.log(TAG, sourcePacket.getLength() + "");
-                                sourceSoundPacket = new DatagramPacket(sourceBuffer[sounceBufferIndex], 4, sourceBuffer[sounceBufferIndex].length - 4, phoneAdd.getIpAddress(), phoneAdd.getPort());
+                                sourceSoundPacket = new DatagramPacket(sourceBuffer[sourceBufferIndex], 4, sourceBuffer[sourceBufferIndex].length - 4, phoneAdd.getIpAddress(), phoneAdd.getPort());
                                 communicationPort.send(sourceSoundPacket);
                             }
 
-                            sounceBufferIndex = (sounceBufferIndex + 1) % 100;
+                            sourceBufferIndex = (sourceBufferIndex + 1) % 100;
                         }
                     } catch (IOException e) {
                         DebugMessage.log(TAG, "source socket error");
@@ -161,22 +161,28 @@ public class STUN implements Runnable {
             }).start();
 
             //start listening to the port
-            byte[] buffer = new byte[512];
+            byte[][] buffer = new byte[100][512];
+            int bufferIndex = 0;
+            String mac;
+            IPEndPoint testTarget;
+            byte[] mac_bytes;
+            byte[] toSend = new byte[516];
+
             while (true) {
-                DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                DatagramPacket packet = new DatagramPacket(buffer[bufferIndex], buffer[bufferIndex].length);
                 communicationPort.receive(packet);
                 DebugMessage.log(TAG, packet.getLength() + "");
                 if (packet.getLength() == 6) {
-                    phoneAdd = byte2addr(buffer);
+                    phoneAdd = byte2addr(buffer[bufferIndex]);
                     DebugMessage.log(TAG, phoneAdd.toString());
                     heartBeatAddress = phoneAdd.getIpAddress();
                     heartBeatPort = phoneAdd.getPort();
                     heartbeat = "1".getBytes();
                     isPhoneOnline = true;
                 } else if (packet.getLength() == 1) { // either response from stun (1 -> phone offline) or heartbeat (2) from phone
-                    String msg = new String(buffer, 0, packet.getLength());
+                    String msg = new String(buffer[bufferIndex], 0, packet.getLength());
                 } else if (packet.getLength() == 8) { // LC STOP
-                    String msg = new String(buffer, 0, packet.getLength());
+                    String msg = new String(buffer[bufferIndex], 0, packet.getLength());
                     DebugMessage.log(TAG, msg);
                     heartBeatAddress = InetAddress.getByName(lightSailPublicIP);
                     heartBeatPort = 7000;
@@ -185,16 +191,15 @@ public class STUN implements Runnable {
                 } else if (packet.getLength() == 512) { // sound packets
                     if (!sourcePool.isEmpty()) {
                         // forward the sound to device
-                        String mac = (String) sourcePool.keySet().toArray()[0];
-                        IPEndPoint testTarget = sourcePool.get(mac);
-                        byte[] mac_bytes = mac.getBytes();
-                        byte[] toSend = new byte[516];
+                        mac = (String) sourcePool.keySet().toArray()[0];
+                        testTarget = sourcePool.get(mac);
+                        mac_bytes = mac.getBytes();
                         int i = 0;
                         for (; i < 4; i++) {
                             toSend[i] = mac_bytes[i];
                         }
                         for (; i < 516; i++) {
-                            toSend[i] = buffer[i - 4];
+                            toSend[i] = buffer[bufferIndex][i - 4];
                         }
 
                         DatagramPacket toSendPacket = new DatagramPacket(toSend, toSend.length, testTarget.getIpAddress(), testTarget.getPort());
@@ -202,7 +207,7 @@ public class STUN implements Runnable {
                     }
                     // if source pool is empty, discard the packet
                 }
-
+                bufferIndex = (bufferIndex + 1) % 100;
             }
         } catch (SocketException e) {
             System.out.println("Binding to port " + listeningPort + " fail");
