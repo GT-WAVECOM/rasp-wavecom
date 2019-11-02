@@ -185,6 +185,20 @@ public class STUN implements Runnable {
                 } else if (packet.getLength() == 512) { // sound packets
                     if (!sourcePool.isEmpty()) {
                         // forward the sound to device
+                        String mac = (String) sourcePool.keySet().toArray()[0];
+                        IPEndPoint testTarget = sourcePool.get(mac);
+                        byte[] mac_bytes = mac.getBytes();
+                        byte[] toSend = new byte[516];
+                        int i = 0;
+                        for (; i < 4; i++) {
+                            toSend[i] = mac_bytes[i];
+                        }
+                        for (; i < 516; i++) {
+                            toSend[i] = buffer[i - 4];
+                        }
+
+                        DatagramPacket toSendPacket = new DatagramPacket(toSend, toSend.length, testTarget.getIpAddress(), testTarget.getPort());
+                        communicationPort.send(toSendPacket);
                     }
                     // if source pool is empty, discard the packet
                 }
