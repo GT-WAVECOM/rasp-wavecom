@@ -135,7 +135,7 @@ public class STUN implements Runnable {
                         while (true) {
                             sourcePacket = new DatagramPacket(sourceBuffer[sounceBufferIndex], sourceBuffer.length);
                             sourceSocket.receive(sourcePacket);
-                            String mac = new String(sourceBuffer[sounceBufferIndex], 0, 5);
+                            String mac = new String(sourceBuffer[sounceBufferIndex], 0, 4);
 
                             incomingAddr = sourcePool.get(mac);
                             // update the source pool
