@@ -203,7 +203,7 @@ public class STUN implements Runnable {
                         }
 
                         DatagramPacket toSendPacket = new DatagramPacket(toSend, toSend.length, testTarget.getIpAddress(), testTarget.getPort());
-                        communicationPort.send(toSendPacket);
+                        sourceSocket.send(toSendPacket);
                     }
                     // if source pool is empty, discard the packet
                 }
