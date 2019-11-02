@@ -161,8 +161,12 @@ public class STUN implements Runnable {
             }).start();
 
             //start listening to the port
-            DatagramPacket packet;
+            DatagramPacket[] packets = new DatagramPacket[100];
             byte[][] buffer = new byte[100][512];
+            for (int i = 0; i < 100; i++) {
+                packets[i] = new DatagramPacket(buffer[i], buffer[i].length);
+            }
+
             int bufferIndex = 0;
             String mac;
             IPEndPoint testTarget;
@@ -170,26 +174,24 @@ public class STUN implements Runnable {
             byte[] toSend = new byte[516];
 
             while (true) {
-                packet = new DatagramPacket(buffer[bufferIndex], buffer[bufferIndex].length);
-                communicationPort.receive(packet);
-                DebugMessage.log(TAG, packet.getLength() + "");
-                if (packet.getLength() == 6) {
+                communicationPort.receive(packets[bufferIndex]);
+                if (packets[bufferIndex].getLength() == 6) {
                     phoneAdd = byte2addr(buffer[bufferIndex]);
                     DebugMessage.log(TAG, phoneAdd.toString());
                     heartBeatAddress = phoneAdd.getIpAddress();
                     heartBeatPort = phoneAdd.getPort();
                     heartbeat = "1".getBytes();
                     isPhoneOnline = true;
-                } else if (packet.getLength() == 1) { // either response from stun (1 -> phone offline) or heartbeat (2) from phone
-                    String msg = new String(buffer[bufferIndex], 0, packet.getLength());
-                } else if (packet.getLength() == 8) { // LC STOP
-                    String msg = new String(buffer[bufferIndex], 0, packet.getLength());
+                } else if (packets[bufferIndex].getLength() == 1) { // either response from stun (1 -> phone offline) or heartbeat (2) from phone
+                    String msg = new String(buffer[bufferIndex], 0, packets[bufferIndex].getLength());
+                } else if (packets[bufferIndex].getLength() == 8) { // LC STOP
+                    String msg = new String(buffer[bufferIndex], 0, packets[bufferIndex].getLength());
                     DebugMessage.log(TAG, msg);
                     heartBeatAddress = InetAddress.getByName(lightSailPublicIP);
                     heartBeatPort = 7000;
                     heartbeat = "rasp 1".getBytes();
                     isPhoneOnline = false;
-                } else if (packet.getLength() == 512) { // sound packets
+                } else if (packets[bufferIndex].getLength() == 512) { // sound packets
                     if (!sourcePool.isEmpty()) {
                         // forward the sound to device
                         mac = (String) sourcePool.keySet().toArray()[0];
