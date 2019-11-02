@@ -10,7 +10,7 @@ public class VoipServer {
     private String lightSailPublicIP;
     private int numOfSTUN;
     private boolean[] stunPoolStatus;
-    private Map<String, PoolInformation> sourcePool;
+    private Map<String, IPEndPoint> sourcePool;
 
     public VoipServer(String lightSailPublicIP, int numOfSTUN) {
         this.lightSailPublicIP = lightSailPublicIP;
