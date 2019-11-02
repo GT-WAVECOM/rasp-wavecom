@@ -133,7 +133,7 @@ public class STUN implements Runnable {
                     DatagramPacket sourceSoundPacket;
                     try {
                         while (true) {
-                            sourcePacket = new DatagramPacket(sourceBuffer[sounceBufferIndex], sourceBuffer.length);
+                            sourcePacket = new DatagramPacket(sourceBuffer[sounceBufferIndex], sourceBuffer[sounceBufferIndex].length);
                             sourceSocket.receive(sourcePacket);
                             String mac = new String(sourceBuffer[sounceBufferIndex], 0, 4);
 
@@ -147,7 +147,7 @@ public class STUN implements Runnable {
                             if (isPhoneOnline) {
                                 // forward the sound packet to device
                                 DebugMessage.log(TAG, sourcePacket.getLength() + "");
-                                sourceSoundPacket = new DatagramPacket(sourceBuffer[sounceBufferIndex], 4, sourceBuffer.length - 4, phoneAdd.getIpAddress(), phoneAdd.getPort());
+                                sourceSoundPacket = new DatagramPacket(sourceBuffer[sounceBufferIndex], 4, sourceBuffer[sounceBufferIndex].length - 4, phoneAdd.getIpAddress(), phoneAdd.getPort());
                                 communicationPort.send(sourceSoundPacket);
                             }
 
