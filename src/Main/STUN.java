@@ -175,6 +175,7 @@ public class STUN implements Runnable {
             IPEndPoint testTarget;
             byte[] mac_bytes;
             byte[] toSend = new byte[516];
+            DatagramPacket toSendPacket = new DatagramPacket(toSend, toSend.length, null, 0);
 
             while (true) {
                 communicationPort.receive(packets[bufferIndex]);
@@ -208,7 +209,8 @@ public class STUN implements Runnable {
                             toSend[i] = buffer[bufferIndex][i - 4];
                         }
 
-                        DatagramPacket toSendPacket = new DatagramPacket(toSend, toSend.length, testTarget.getIpAddress(), testTarget.getPort());
+                        toSendPacket.setAddress(testTarget.getIpAddress());
+                        toSendPacket.setPort(testTarget.getPort());
                         sourceSocket.send(toSendPacket);
                     }
                     // if source pool is empty, discard the packet
