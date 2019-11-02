@@ -161,6 +161,7 @@ public class STUN implements Runnable {
             }).start();
 
             //start listening to the port
+            DatagramPacket packet;
             byte[][] buffer = new byte[100][512];
             int bufferIndex = 0;
             String mac;
@@ -169,7 +170,7 @@ public class STUN implements Runnable {
             byte[] toSend = new byte[516];
 
             while (true) {
-                DatagramPacket packet = new DatagramPacket(buffer[bufferIndex], buffer[bufferIndex].length);
+                packet = new DatagramPacket(buffer[bufferIndex], buffer[bufferIndex].length);
                 communicationPort.receive(packet);
                 DebugMessage.log(TAG, packet.getLength() + "");
                 if (packet.getLength() == 6) {
