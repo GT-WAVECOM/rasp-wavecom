@@ -127,14 +127,15 @@ public class STUN implements Runnable {
                 @Override
                 public void run() {
                     DatagramPacket sourcePacket;
-                    byte[] sourceBuffer = new byte[516];
+                    byte[][] sourceBuffer = new byte[100][516];
+                    int sounceBufferIndex = 0;
                     IPEndPoint incomingAddr;
                     DatagramPacket sourceSoundPacket;
                     try {
                         while (true) {
-                            sourcePacket = new DatagramPacket(sourceBuffer, sourceBuffer.length);
+                            sourcePacket = new DatagramPacket(sourceBuffer[sounceBufferIndex], sourceBuffer.length);
                             sourceSocket.receive(sourcePacket);
-                            String mac = new String(sourceBuffer, 0, 5);
+                            String mac = new String(sourceBuffer[sounceBufferIndex], 0, 5);
 
                             incomingAddr = sourcePool.get(mac);
                             // update the source pool
@@ -146,9 +147,11 @@ public class STUN implements Runnable {
                             if (isPhoneOnline) {
                                 // forward the sound packet to device
                                 DebugMessage.log(TAG, sourcePacket.getLength() + "");
-                                sourceSoundPacket = new DatagramPacket(sourceBuffer, 4, sourceBuffer.length - 4, phoneAdd.getIpAddress(), phoneAdd.getPort());
+                                sourceSoundPacket = new DatagramPacket(sourceBuffer[sounceBufferIndex], 4, sourceBuffer.length - 4, phoneAdd.getIpAddress(), phoneAdd.getPort());
                                 communicationPort.send(sourceSoundPacket);
                             }
+
+                            sounceBufferIndex = (sounceBufferIndex + 1) % 100;
                         }
                     } catch (IOException e) {
                         DebugMessage.log(TAG, "source socket error");
